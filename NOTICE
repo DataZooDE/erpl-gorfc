@@ -1,0 +1,30 @@
+erpl-gorfc
+Copyright (c) DataZoo GmbH
+
+This product is licensed under the Business Source License 1.1 (BUSL-1.1).
+See the LICENSE file at the root of the erpl-proto distribution.
+
+--------------------------------------------------------------------------
+Portions adapted from SAP's gorfc
+--------------------------------------------------------------------------
+
+The Go binding layer in gorfc/ is adapted from:
+
+    https://github.com/SAP-archive/gorfc
+    gorfc/gorfc.go and gorfc/gorfc_test.go
+    Copyright (c) SAP SE
+    Licensed under the Apache License, Version 2.0
+
+A copy of the Apache License, Version 2.0 is available at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+The adapted code is the binding's use of the SAP NW RFC C API -- the Go type
+mapping, the parameter-filling and result-wrapping shape, and the public API
+this package reproduces. It carries no knowledge of the RFC wire protocol.
+erpl-proto's implementation of that protocol is clean-room, derived solely
+from this project's own captures of libsapnwrfc, and nothing in the adapted
+code informs it.
+
+SAP and the SAP logo are trademarks of SAP SE. This project is not affiliated
+with, endorsed by, or sponsored by SAP.

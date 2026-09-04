@@ -1,0 +1,171 @@
+// One program, built twice: once against SAP's gorfc and the NW RFC SDK, once
+// against erpl-gorfc. Whatever it prints must be identical.
+//
+// The import path is the only difference between the two builds, which is why
+// it is substituted rather than written -- a second copy of this file would
+// drift, and a drifted copy makes the diff meaningless.
+package main
+
+import (
+	"fmt"
+	"os"
+	"sort"
+	"time"
+
+	"GORFC_IMPORT_PATH"
+)
+
+func params() gorfc.ConnectionParameters {
+	env := func(name, fallback string) string {
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+		return fallback
+	}
+	return gorfc.ConnectionParameters{
+		"user":   os.Getenv("SAP_USER"),
+		"passwd": os.Getenv("SAP_PASSWD"),
+		"ashost": env("SAP_ASHOST", "localhost"),
+		"sysnr":  env("SAP_SYSNR", "00"),
+		"client": env("SAP_CLIENT", "001"),
+		"lang":   env("SAP_LANG", "EN"),
+	}
+}
+
+// show prints one value per line, named. Printing a map directly would put Go's
+// randomised iteration order into the diff as a difference that is not one.
+func show(label string, value interface{}) {
+	fmt.Printf("%-28s %#v\n", label+":", value)
+}
+
+func showMap(label string, m map[string]interface{}, keys ...string) {
+	if len(keys) == 0 {
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+	}
+	for _, k := range keys {
+		show(label+"."+k, m[k])
+	}
+}
+
+func main() {
+	conn, err := gorfc.ConnectionFromParams(params())
+	if err != nil {
+		fmt.Println("logon failed:", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+
+	show("alive", conn.Alive())
+
+	attr, err := conn.GetConnectionAttributes()
+	if err != nil {
+		fmt.Println("attributes failed:", err)
+		os.Exit(1)
+	}
+	// Not every attribute: `dest` is the destination name, which differs
+	// legitimately, and the trace fields are configuration rather than result.
+	for _, k := range []string{"client", "user", "language", "isoLanguage", "sysId", "sysNumber", "rfcRole", "type", "partnerType"} {
+		show("attr."+k, attr[k])
+	}
+
+	echo, err := conn.Call("STFC_CONNECTION", map[string]interface{}{"REQUTEXT": "side by side"})
+	if err != nil {
+		fmt.Println("STFC_CONNECTION failed:", err)
+		os.Exit(1)
+	}
+	show("echotext", echo["ECHOTEXT"])
+
+	structResult, err := conn.Call("STFC_STRUCTURE", map[string]interface{}{
+		"IMPORTSTRUCT": map[string]interface{}{
+			"RFCCHAR1": "A",
+			"RFCCHAR4": "ABCD",
+			"RFCINT1":  7,
+			"RFCINT2":  1234,
+			"RFCINT4":  56789,
+			"RFCFLOAT": 1.23456789,
+			"RFCDATE":  time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC),
+			"RFCTIME":  time.Date(2026, 9, 4, 13, 45, 59, 0, time.UTC),
+		},
+		"RFCTABLE": []interface{}{
+			map[string]interface{}{"RFCCHAR4": "ROW1", "RFCINT4": 1},
+			map[string]interface{}{"RFCCHAR4": "ROW2", "RFCINT4": 2},
+		},
+	})
+	if err != nil {
+		fmt.Println("STFC_STRUCTURE failed:", err)
+		os.Exit(1)
+	}
+	showMap("echostruct", structResult["ECHOSTRUCT"].(map[string]interface{}))
+	table := structResult["RFCTABLE"].([]interface{})
+	show("rfctable.rows", len(table))
+	for i, row := range table {
+		showMap(fmt.Sprintf("rfctable[%d]", i), row.(map[string]interface{}), "RFCCHAR4", "RFCINT4")
+	}
+
+	// UTCLONG, read and written, through the fixture that declares one. This
+	// is the one value whose text form the two libraries could disagree about,
+	// and the only way to settle it is to see what each prints.
+	if _, err := conn.GetFunctionDescription("Z_ERPL_DATATYPES"); err == nil {
+		utc, err := conn.Call("Z_ERPL_DATATYPES", map[string]interface{}{
+			"IV_UTC": "2026-08-30 23:59:58.1234567",
+		})
+		if err != nil {
+			show("utclong send err", fmt.Sprintf("%v", err))
+		} else {
+			show("utclong read back", utc["EV_UTC"])
+			show("utclong type", fmt.Sprintf("%T", utc["EV_UTC"]))
+		}
+		// ...and the same value sent back in whatever shape it arrived.
+		if err == nil {
+			again, err := conn.Call("Z_ERPL_DATATYPES", map[string]interface{}{
+				"IV_UTC": utc["EV_UTC"],
+			})
+			if err != nil {
+				show("utclong round trip err", fmt.Sprintf("%v", err))
+			} else {
+				show("utclong round trip", again["EV_UTC"])
+			}
+		}
+	} else {
+		show("utclong", "fixture Z_ERPL_DATATYPES absent")
+	}
+
+	desc, err := conn.GetFunctionDescription("STFC_CONNECTION")
+	if err != nil {
+		fmt.Println("describe failed:", err)
+		os.Exit(1)
+	}
+	show("desc.name", desc.Name)
+	show("desc.parameters", len(desc.Parameters))
+	sorted := append([]gorfc.ParameterDescription(nil), desc.Parameters...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	for _, p := range sorted {
+		show("param."+p.Name, fmt.Sprintf("%s %s uc=%d nuc=%d optional=%v",
+			p.ParameterType, p.Direction, p.UcLength, p.NucLength, p.Optional))
+	}
+
+	// An error is part of the surface: the type, and what it says.
+	if _, err := conn.Call("Z_NO_SUCH_FUNCTION_MODULE_AT_ALL", map[string]interface{}{}); err != nil {
+		show("unknown function err", fmt.Sprintf("%T", err))
+		if rfcErr, ok := err.(*gorfc.RfcError); ok {
+			show("unknown function key", rfcErr.ErrorInfo.Key)
+		}
+	} else {
+		fmt.Println("unknown function module: no error")
+	}
+
+	if err := conn.Ping(); err != nil {
+		fmt.Println("ping after error failed:", err)
+		os.Exit(1)
+	}
+	show("usable after error", true)
+
+	major, minor, patch := gorfc.GetNWRFCLibVersion()
+	// Deliberately not printed as a version: this is the one value that is
+	// expected to differ, and printing it would put a difference that is not a
+	// difference into every diff.
+	show("version is reported", major+minor+patch > 0)
+}
