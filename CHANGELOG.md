@@ -1,8 +1,10 @@
 # Changelog
 
-All notable changes to `erpl-gorfc`. Calendar versioning, `YYYY.M.D`.
+All notable changes to `erpl-gorfc`. Versions are `v0.YYYY.MMDD` — the erpl
+projects' calendar versioning, folded into what Go modules accept. See the
+README for why the shape is that and not `YYYY.M.D`.
 
-## 2026.9.4
+## v0.2026.904 — 2026-09-04
 
 First release. A drop-in replacement for SAP's archived gorfc, built as a
 cgo binding over `crates/erpl-proto-nwrfc` — the same C API gorfc itself was

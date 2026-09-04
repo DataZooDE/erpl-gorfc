@@ -93,9 +93,20 @@ differs.
 
 ## Version
 
-**Calendar versioning**, `YYYY.M.D`, as the erpl projects use: a release tells
-you when it was cut, which for a library tracking someone else's wire protocol
-is the useful fact. A second release on one day takes a `.N` suffix.
+`v0.YYYY.MMDD` — `v0.2026.904` was cut on 2026-09-04. A release tells you when
+it was cut, which for a library tracking someone else's wire protocol is the
+useful fact.
+
+The shape is dictated by Go. The other erpl projects version as `YYYY.M.D`, but
+Go modules are semver and read the first component as the *major* version: any
+major above 1 requires the import path to carry a `/vN` suffix, so `v2026.9.4`
+would mean importing `github.com/DataZooDE/erpl-gorfc/v2026` — and a new import
+path every January. Folding the date into the minor and patch keeps the major
+at zero, keeps one import path forever, and still sorts correctly year over
+year.
+
+The consequence to know: a second release on one day has no room in the scheme
+and takes the following day's number.
 
 ## Licence
 
