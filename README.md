@@ -109,6 +109,10 @@ DataZoo.
 The Go binding layer is adapted from SAP's gorfc under Apache-2.0; see
 [NOTICE](NOTICE).
 
+## Issues
+
+Bugs and compatibility gaps: https://github.com/DataZooDE/erpl-gorfc/issues
+
 ## Source, issues and contributions
 
 This repository is the published module: the Go binding, and the prebuilt

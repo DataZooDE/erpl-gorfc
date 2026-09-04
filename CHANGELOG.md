@@ -2,9 +2,9 @@
 
 All notable changes to `erpl-gorfc`. Calendar versioning, `YYYY.M.D`.
 
-## Unreleased
+## 2026.9.4
 
-First implementation. A drop-in replacement for SAP's archived gorfc, built as a
+First release. A drop-in replacement for SAP's archived gorfc, built as a
 cgo binding over `crates/erpl-proto-nwrfc` — the same C API gorfc itself was
 written against — with the native code linked statically from an archive
 committed per platform, so `go get` needs neither a Rust toolchain nor the SAP
@@ -56,9 +56,10 @@ into an error message.
 
 ### Release gate
 
-Run on 2026-09-04 against the a4h ABAP Platform Trial, kernel 7.58:
+Run on 2026-09-04 against the a4h ABAP Platform Trial, kernel 7.58, on the
+archives this release ships:
 
-- 50 Go tests, live, no failures and **no skips**
+- 51 Go tests, live, no failures and **no skips**
 - 513 Rust tests across the workspace, no failures
 - `go test -race`, clean
 - erpl's own suites through the C-ABI shim: **rfc 33/33** (1 skipped) and
