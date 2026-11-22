@@ -35,16 +35,24 @@ import (
 // fillString converts a Go string into a freshly allocated, NUL-terminated
 // UTF-16 string. The caller owns the result and must free it.
 func fillString(gostr string) (sapuc *C.SAP_UC, err error) {
+	sapuc, _, err = fillStringN(gostr)
+	return
+}
+
+// fillStringN is fillString that also reports how many UTF-16 units it wrote.
+// A counted setter must be given that count, not strlenU of the result: the
+// latter stops at the first NUL, so "a\x00b" went to a STRING as "a".
+func fillStringN(gostr string) (sapuc *C.SAP_UC, units C.uint, err error) {
 	// UTF-16 never needs more code units than UTF-8 needs bytes, so one
 	// SAP_UC per byte plus a terminator is always enough. GoMallocU zeroes,
 	// which is what terminates the empty string.
 	sapucSize := C.uint(len(gostr) + 1)
 	sapuc = C.mallocU(sapucSize)
 	if sapuc == nil {
-		return nil, goRfcError(fmt.Sprintf("could not allocate %d characters", sapucSize), nil)
+		return nil, 0, goRfcError(fmt.Sprintf("could not allocate %d characters", sapucSize), nil)
 	}
 	if len(gostr) == 0 {
-		return sapuc, nil
+		return sapuc, 0, nil
 	}
 
 	var errorInfo C.RFC_ERROR_INFO
@@ -59,9 +67,9 @@ func fillString(gostr string) (sapuc *C.SAP_UC, err error) {
 		// this function defers a free on the returned pointer, and on the
 		// error path there is no pointer to defer on.
 		C.free(unsafe.Pointer(sapuc))
-		return nil, rfcError(errorInfo, "Could not fill the string %q", gostr)
+		return nil, 0, rfcError(errorInfo, "Could not fill the string %q", gostr)
 	}
-	return sapuc, nil
+	return sapuc, resultLen, nil
 }
 
 // wrapString converts a NUL-terminated UTF-16 string to Go.

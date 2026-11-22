@@ -4,6 +4,31 @@ All notable changes to `erpl-gorfc`. Versions are `v0.YYYY.MMDD` — the erpl
 projects' calendar versioning, folded into what Go modules accept. See the
 README for why the shape is that and not `YYYY.M.D`.
 
+## v0.2026.1122 — 2026-11-22
+
+Built on the current shim. `examples/run_both.sh` against SAP's archived gorfc:
+**no differences across 59 lines**, including what a connection is good for
+after each kind of ABAP failure. 56 live tests pass against a4h (kernel 816).
+
+- **An SAP system with an instance number other than 00 is reached.** The
+  September build announced instance 00 whatever was configured, so the gateway
+  refused the partner or, on a host that also runs an instance 00, logged on to
+  the wrong system.
+- **A call longer than 60 seconds no longer fails** and drops the connection;
+  SAP's library completes it. Logon stays bounded at 60 s.
+- **The connection lives exactly as long as with SAP's library**, measured: a
+  `MESSAGE`-raised failure ends it, a declared exception does not, a short dump
+  is found on the next call. Short dumps are reported as runtime failures
+  (code 3), not as messages.
+- **A signal during a socket read no longer costs the connection.**
+- `DESTINATION 'BACK'` callbacks, `RfcCancel`, and `RFC_BUFFER_TOO_SMALL` with
+  the required length, as SAP's library reports it.
+- `DATE`/`TIME` accept exactly eight/six ASCII digits or empty; a byte-length
+  check let `"ääää"` read past the converted buffer. A string with an embedded
+  NUL now reaches ABAP whole in a `CHAR` field.
+- `Open` closes a handle the library returned together with an error.
+- Windows: an aborted call no longer stays blocked on its socket.
+
 ## v0.2026.904 — 2026-09-04
 
 First release. A drop-in replacement for SAP's archived gorfc, built as a

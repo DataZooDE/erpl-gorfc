@@ -9,5 +9,5 @@ package gorfc
 // The README has the build story.
 
 // #cgo CFLAGS: -I${SRCDIR}/../include
-// #cgo LDFLAGS: -L${SRCDIR}/../lib/windows_amd64 -lsapnwrfc -lws2_32 -lbcrypt -luserenv -lntdll -ladvapi32
+// #cgo LDFLAGS: -L${SRCDIR}/../lib/windows_amd64 -lsapnwrfc -lws2_32 -lbcrypt -luserenv -lntdll -ladvapi32 -lsynchronization
 import "C"

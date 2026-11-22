@@ -33,6 +33,19 @@ func TestDateAndTimeCoercion(t *testing.T) {
 			t.Errorf("asDate(%q) = %q, want an error", bad, got)
 		}
 	}
+	// Eight bytes but four UTF-16 units, and eight characters that are not
+	// digits: a byte-length check passed the first, and RfcSetDate then read
+	// past the four units the conversion produced.
+	for _, bad := range []string{"\u00e4\u00e4\u00e4\u00e4", "2026O904", "abcdefgh"} {
+		if got, err := asDate(bad); err == nil {
+			t.Errorf("asDate(%q) = %q, want an error", bad, got)
+		}
+	}
+	for _, bad := range []string{"\u00e4\u00e4\u00e4", "12h456"} {
+		if got, err := asTime(bad); err == nil {
+			t.Errorf("asTime(%q) = %q, want an error", bad, got)
+		}
+	}
 	for _, bad := range []string{"13", "134559 ", "13:45:59"} {
 		if got, err := asTime(bad); err == nil {
 			t.Errorf("asTime(%q) = %q, want an error", bad, got)

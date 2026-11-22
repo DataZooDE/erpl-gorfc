@@ -185,6 +185,12 @@ func (conn *Connection) Open() (err error) {
 	conn.handle = C.RfcOpenConnection(&conn.connParams[0], conn.paramCount, &errorInfo)
 	runtime.KeepAlive(conn)
 	if conn.handle == nil || errorInfo.code != C.RFC_OK {
+		// A handle that came back alongside an error is still a registry
+		// entry in the library; dropping it unclosed leaked one per attempt.
+		if conn.handle != nil {
+			var closeInfo C.RFC_ERROR_INFO
+			C.RfcCloseConnection(conn.handle, &closeInfo)
+		}
 		conn.handle = nil
 		return rfcError(errorInfo, "Connection could not be opened")
 	}

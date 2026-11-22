@@ -163,6 +163,33 @@ func main() {
 	}
 	show("usable after error", true)
 
+	// Spec PRO-12: what a connection is good for after each kind of ABAP
+	// failure. METHOD 0 is MESSAGE-raised, 2 a declared exception, 3 a short
+	// dump. SAP's C library invalidates the handle after the first, keeps it
+	// after the second, and finds it dead on the next call after the third
+	// (oracle/abi_after_message.c); what the Go layer adds on top -- a
+	// reopen, or nothing -- is what this shows.
+	for _, method := range []string{"0", "2", "3"} {
+		c, err := gorfc.ConnectionFromParams(params())
+		if err != nil {
+			fmt.Println("logon failed:", err)
+			os.Exit(1)
+		}
+		_, err = c.Call("RFC_RAISE_ERROR", map[string]interface{}{"METHOD": method, "MESSAGETYPE": "E"})
+		show("raise "+method+" err type", fmt.Sprintf("%T", err))
+		if rfcErr, ok := err.(*gorfc.RfcError); ok {
+			show("raise "+method+" code", rfcErr.ErrorInfo.Code)
+		}
+		show("raise "+method+" alive", c.Alive())
+		show("raise "+method+" ping", fmt.Sprintf("%T", c.Ping()))
+		_, err = c.Call("STFC_CONNECTION", map[string]interface{}{"REQUTEXT": "after"})
+		show("raise "+method+" next call", fmt.Sprintf("%T", err))
+		if rfcErr, ok := err.(*gorfc.RfcError); ok {
+			show("raise "+method+" next code", rfcErr.ErrorInfo.Code)
+		}
+		c.Close()
+	}
+
 	major, minor, patch := gorfc.GetNWRFCLibVersion()
 	// Deliberately not printed as a version: this is the one value that is
 	// expected to differ, and printing it would put a difference that is not a

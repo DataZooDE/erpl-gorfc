@@ -468,6 +468,61 @@ RFC_RC RfcCloseConnection(RFC_CONNECTION_HANDLE handle,
                           RFC_ERROR_INFO *error);
 
 /**
+ * Wakes the call another thread is waiting on, on `handle`, by shutting its
+ * socket down; that call then fails as a communication failure and the
+ * conversation is over. **Not part of SAP's API** -- an erpl extension.
+ *
+ * For a caller that has given up on a call altogether (a Ruby `Thread#kill`
+ * or `Timeout`, a Go context cancellation) when the peer may have vanished:
+ * `RfcCancel` needs a peer that answers, and neither SAP's library nor this
+ * one sets keepalive or a read timeout on an established call (PRO-12a), so
+ * nothing else ends that wait. `RfcCloseConnection` does not either: in SAP's
+ * library it leaves the waiting call to finish (CAN-6), and so does this one.
+ * Usable before or after `RfcCloseConnection` on the same handle.
+ *
+ * `RFC_OK` when a call was in flight and is being woken; `RFC_ILLEGAL_STATE`
+ * when none was.
+ *
+ * # Safety
+ *
+ * `error` must be writable or null.
+ */
+RFC_RC ErplAbortCall(RFC_CONNECTION_HANDLE handle,
+                     RFC_ERROR_INFO *error);
+
+/**
+ * Cancels the call in flight on `handle`, from another thread (spec CAN-1).
+ *
+ * Measured against SAP's library (`oracle/abi_after_message.c`, CANCEL):
+ * `RfcCancel` returns `RFC_OK`, the blocked `RfcInvoke` returns
+ * `RFC_CANCELED` (7, group 4) well before the call would have finished, and
+ * the handle is then invalid to everything, close included (CAN-2). With no
+ * call in flight it is refused as `RFC_ILLEGAL_STATE` and changes nothing.
+ *
+ * # Safety
+ *
+ * `error` must be writable or null.
+ */
+RFC_RC RfcCancel(RFC_CONNECTION_HANDLE handle,
+                 RFC_ERROR_INFO *error);
+
+/**
+ * Whether `handle` is a connection this library still answers to.
+ *
+ * Measured against SAP's library (`oracle/abi_after_message.c`): a live
+ * handle gives `1` and `RFC_OK`; a closed or invalidated one -- after
+ * `RfcCloseConnection`, or after a MESSAGE-raised failure -- gives `0` and
+ * `RFC_INVALID_HANDLE`. A registration counts as a live handle.
+ *
+ * # Safety
+ *
+ * `is_valid` must be writable or null; `error` must be writable or null.
+ */
+RFC_RC RfcIsConnectionHandleValid(RFC_CONNECTION_HANDLE handle,
+                                  int *is_valid,
+                                  RFC_ERROR_INFO *error);
+
+/**
  * # Safety
  *
  * As `RfcCloseConnection`.
@@ -686,12 +741,6 @@ void *RfcDescribeAbapObject(void *a0,
 /**
  * Not implemented; reports itself by name.
  */
-void *RfcDescribeFunction(void *a0,
-                          void *a1);
-
-/**
- * Not implemented; reports itself by name.
- */
 void *RfcDescribeType(void *a0,
                       void *a1);
 
@@ -776,13 +825,6 @@ void *RfcInsertNewRow(void *a0,
 /**
  * Not implemented; reports itself by name.
  */
-void *RfcRegisterServer(void *a0,
-                        unsigned int a1,
-                        void *a2);
-
-/**
- * Not implemented; reports itself by name.
- */
 void *RfcStartServer(int a0,
                      void *a1,
                      void *a2,
@@ -842,6 +884,55 @@ RFC_RC RfcInstallServerFunction(const SAP_UC *_sysid,
 RFC_SERVER_HANDLE RfcCreateServer(const RFC_CONNECTION_PARAMETER *params,
                                   unsigned int count,
                                   RFC_ERROR_INFO *error);
+
+/**
+ * The description of a function container, as a server handler needs.
+ *
+ * A handler is handed only the `RFC_FUNCTION_HANDLE`, so without this it
+ * cannot discover which function it is being asked to serve, nor what
+ * parameters that function has. The container already knows its own metadata;
+ * this exposes it under the description handle the rest of the API takes.
+ *
+ * # Safety
+ *
+ * `func` must be a live function container; `error` must be writable.
+ */
+RFC_FUNCTION_DESC_HANDLE RfcDescribeFunction(RFC_FUNCTION_HANDLE func,
+                                             RFC_ERROR_INFO *error);
+
+/**
+ * Registers and serves on the **calling** thread.
+ *
+ * The counterpart of [`RfcCreateServer`]/[`RfcLaunchServer`], which spawn
+ * their own threads. A consumer whose runtime cannot be called into from a
+ * foreign thread needs this one: Ruby's C API, for instance, only lets a
+ * thread re-acquire the interpreter lock if that same thread released it, so a
+ * handler dispatched from a thread the runtime never created cannot run at
+ * all. Serving on the caller's thread removes the problem rather than working
+ * around it with a queue.
+ *
+ * # Safety
+ *
+ * `params` must point to `count` readable entries; `error` must be writable.
+ */
+RFC_CONNECTION_HANDLE RfcRegisterServer(const RFC_CONNECTION_PARAMETER *params,
+                                        unsigned int count,
+                                        RFC_ERROR_INFO *error);
+
+/**
+ * Serves at most one call, on this thread, within `timeout` seconds.
+ *
+ * `RFC_RETRY` when nothing arrived in time -- the normal state of an idle
+ * registration, and what lets a caller re-check its own shutdown flag between
+ * calls. The reference uses the same code for the same purpose.
+ *
+ * # Safety
+ *
+ * `handle` must come from [`RfcRegisterServer`]; `error` must be writable.
+ */
+RFC_RC RfcListenAndDispatch(RFC_CONNECTION_HANDLE handle,
+                            int timeout,
+                            RFC_ERROR_INFO *error);
 
 /**
  * Attaches to the gateway and starts serving.
@@ -1040,6 +1131,22 @@ RFC_RC RfcGetTable(DATA_CONTAINER_HANDLE handle,
 RFC_STRUCTURE_HANDLE RfcAppendNewRow(RFC_TABLE_HANDLE table,
                                      RFC_ERROR_INFO *error);
 
+/**
+ * # Safety
+ *
+ * `error`, if non-null, must be writable.
+ */
+RFC_RC RfcDeleteCurrentRow(RFC_TABLE_HANDLE table,
+                           RFC_ERROR_INFO *error);
+
+/**
+ * # Safety
+ *
+ * `error`, if non-null, must be writable.
+ */
+RFC_RC RfcDeleteAllRows(RFC_TABLE_HANDLE table,
+                        RFC_ERROR_INFO *error);
+
 RFC_STRUCTURE_HANDLE RfcGetCurrentRow(RFC_TABLE_HANDLE table,
                                       RFC_ERROR_INFO *error);
 
@@ -1055,6 +1162,38 @@ RFC_RC RfcGetRowCount(RFC_TABLE_HANDLE table,
 RFC_RC RfcMoveTo(RFC_TABLE_HANDLE table,
                  unsigned int index,
                  RFC_ERROR_INFO *error);
+
+/**
+ * # Safety
+ *
+ * `error`, if non-null, must be writable.
+ */
+RFC_RC RfcMoveToFirstRow(RFC_TABLE_HANDLE table,
+                         RFC_ERROR_INFO *error);
+
+/**
+ * # Safety
+ *
+ * `error`, if non-null, must be writable.
+ */
+RFC_RC RfcMoveToLastRow(RFC_TABLE_HANDLE table,
+                        RFC_ERROR_INFO *error);
+
+/**
+ * # Safety
+ *
+ * `error`, if non-null, must be writable.
+ */
+RFC_RC RfcMoveToNextRow(RFC_TABLE_HANDLE table,
+                        RFC_ERROR_INFO *error);
+
+/**
+ * # Safety
+ *
+ * `error`, if non-null, must be writable.
+ */
+RFC_RC RfcMoveToPreviousRow(RFC_TABLE_HANDLE table,
+                            RFC_ERROR_INFO *error);
 
 /**
  * # Safety
@@ -1273,6 +1412,20 @@ RFC_RC RfcSetParameterActive(RFC_FUNCTION_HANDLE function,
                              const SAP_UC *name,
                              int active,
                              RFC_ERROR_INFO *error);
+
+/**
+ * # Safety
+ *
+ * `name` must be NUL-terminated UTF-16 and `is_active` writable.
+ *
+ * Spec PRO-8a, measured: a name the function does not declare answers
+ * `RFC_OK` with 0, and so does a name in the wrong case -- SAP's library
+ * matches exactly.
+ */
+RFC_RC RfcIsParameterActive(RFC_FUNCTION_HANDLE function,
+                            const SAP_UC *name,
+                            int *is_active,
+                            RFC_ERROR_INFO *error);
 
 /**
  * # Safety

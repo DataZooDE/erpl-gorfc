@@ -152,12 +152,12 @@ func fillVariable(cType C.RFCTYPE, container C.DATA_CONTAINER_HANDLE, cName *C.S
 	// fixed-width character types, STRING, and the decimals, which travel as
 	// text so that no digit is lost to a float.
 	setText := func(text string, set func(*C.SAP_UC, C.uint) C.RFC_RC) error {
-		cValue, err := fillString(text)
+		cValue, units, err := fillStringN(text)
 		if err != nil {
 			return err
 		}
 		defer C.free(unsafe.Pointer(cValue))
-		rc = set(cValue, C.strlenU(cValue))
+		rc = set(cValue, units)
 		return checkRC()
 	}
 

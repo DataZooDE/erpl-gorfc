@@ -171,15 +171,22 @@ func asTime(value interface{}) (string, error) {
 	}
 }
 
-// exactly accepts a string of exactly n characters, or an empty one meaning
+// exactly accepts a string of exactly n ASCII digits, or an empty one meaning
 // the ABAP initial value. Anything else is refused: the library reads a fixed
-// width from the buffer, so a wrong length is a memory error, not a data one.
+// width of UTF-16 units from the buffer, so a wrong length is a memory error,
+// not a data one. len() counts UTF-8 bytes, and "ääää" is eight bytes but
+// four units -- the check used to pass it and the library read four units
+// past the text. Requiring ASCII digits makes bytes and units agree.
 func exactly(text string, n int, what, shape string) (string, error) {
 	if text == "" {
 		return "", nil
 	}
-	if len(text) != n {
-		return "", goRfcError(fmt.Sprintf("%q is not an ABAP %s: want %d characters, %s", text, what, n, shape), nil)
+	ok := len(text) == n
+	for i := 0; ok && i < len(text); i++ {
+		ok = text[i] >= '0' && text[i] <= '9'
+	}
+	if !ok {
+		return "", goRfcError(fmt.Sprintf("%q is not an ABAP %s: want %d digits, %s", text, what, n, shape), nil)
 	}
 	return text, nil
 }
