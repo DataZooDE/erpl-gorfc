@@ -4,6 +4,18 @@ All notable changes to `erpl-gorfc`. Versions are `v0.YYYY.MMDD` — the erpl
 projects' calendar versioning, folded into what Go modules accept. See the
 README for why the shape is that and not `YYYY.M.D`.
 
+## v0.2026.1123 — 2026-11-23
+
+Built on the current shim. `examples/run_both.sh` against SAP's archived gorfc:
+**no differences across 59 lines**. 56 live tests pass against a4h (kernel 816),
+none skipped; erpl through the same shim: rfc 36/36, bics 183/183.
+
+- **The shim is faster under parallel reads and on text.** Table cell reads
+  share the registry lock instead of queueing on one exclusive lock, and text is
+  converted to UTF-8 without allocating, with ASCII copied in one pass. On
+  erpl's 297,000-row DD04T read through the same shim, measured in one run,
+  it now takes 6.4 s against SAP's library's 7.0 s (erpl-proto #99, #102).
+
 ## v0.2026.1122 — 2026-11-22
 
 Built on the current shim. `examples/run_both.sh` against SAP's archived gorfc:
