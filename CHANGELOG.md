@@ -4,6 +4,31 @@ All notable changes to `erpl-gorfc`. Versions are `v0.YYYY.MMDD` — the erpl
 projects' calendar versioning, folded into what Go modules accept. See the
 README for why the shape is that and not `YYYY.M.D`.
 
+## v0.2026.1125 — 2026-11-25
+
+Built on the current shim. 56 live tests pass against a4h (kernel 816), none
+skipped. The shim's ABI probes match SAP's library 14 of 14, and a new probe over
+every DDIC type at its extremes matches it value for value, apart from
+`RfcDescribeType`, which the shim does not implement.
+
+- **Text renders as SAP's library renders it** (erpl-proto #109, found by a
+  boundary-value comparison with SAP's library over every DDIC type):
+  `RfcGetString` on a CHAR field drops trailing blanks; UTCLONG text uses SAP's
+  spelling (`YYYY-MM-DDTHH:MM:SS,fffffff`, initial value
+  `0000-00-00T00:00:00,0000000`), and setting a UTCLONG accepts that form or
+  `YYYY-MM-DD HH:MM:SS.fffffff` only, refusing the compact `YYYYMMDDHHMMSS,fffffff`
+  and any other text with `RFC_CONVERSION_FAILURE`; FLOAT text no longer overflows the buffer at
+  the extremes; narrow field descriptors carry SAP's byte offsets.
+- **Large replies use less memory and fewer instructions.** A large reply is
+  now mapped by the library itself and unmapped when it is dropped, so freeing it
+  no longer lets glibc raise its mmap threshold and fragment the host's heap; the
+  host's allocator settings are untouched (Linux glibc; musl, macOS and Windows
+  keep the plain buffer). Decompression copies back-references in bulk. On erpl's
+  297,000-row DD04T read through the same core, peak memory is 40-50% lower and
+  instructions 37% fewer than in the previous release (erpl-proto #107).
+- **Text cells as wide as the caller's buffer are copied without a scan**
+  (erpl-proto #106): 31% fewer instructions on the same read.
+
 ## v0.2026.1123 — 2026-11-23
 
 Built on the current shim. `examples/run_both.sh` against SAP's archived gorfc:
